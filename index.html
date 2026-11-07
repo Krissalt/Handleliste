@@ -41,8 +41,16 @@
   li{display:flex;align-items:center;gap:12px;padding:0 6px 0 14px;min-height:54px;
     border-top:1px solid var(--line);user-select:none}
   li:first-child{border-top:none}
-  .check{flex:none;width:26px;height:26px;border-radius:50%;border:2px solid var(--line);
-    display:grid;place-items:center;transition:all .15s}
+  .check{flex:none;width:26px;height:26px;border-radius:50%;border:2px solid var(--line);background:none;padding:0;
+    display:grid;place-items:center;transition:all .15s;cursor:pointer;position:relative}
+  .check::after{content:"";position:absolute;inset:-14px}
+  li.open{background:var(--accent-soft)}
+  .stepper{flex:none;display:flex;align-items:center;gap:4px}
+  .stepper button{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--card);
+    color:var(--ink);font:inherit;font-size:22px;line-height:1;cursor:pointer;display:grid;place-items:center}
+  .stepper button:active{background:var(--line)}
+  .stepper button:disabled{opacity:.35}
+  .sq{min-width:34px;text-align:center;font-weight:600;font-size:15px}
   .check svg{opacity:0;transition:opacity .15s}
   li.done .check{background:var(--accent);border-color:var(--accent)}
   li.done .check svg{opacity:1}
@@ -88,6 +96,32 @@
   .add:disabled{opacity:.4}
   .hint{font-size:12px;color:var(--muted);text-align:center;margin-top:8px}
 
+  .sortbtn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;
+    padding:8px 12px;font:inherit;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .sortbtn[hidden]{display:none}
+  .badge{background:var(--accent);color:#fff;border-radius:999px;font-size:12px;font-weight:600;padding:1px 7px;min-width:20px;text-align:center}
+  .badge:empty{display:none}
+  .h2link{margin-left:auto;border:none;background:none;color:var(--accent);font:inherit;font-size:12px;
+    font-weight:600;letter-spacing:.02em;text-transform:none;cursor:pointer;padding:4px 0}
+  .sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:10;display:flex;align-items:flex-end;justify-content:center}
+  .sheet-bg[hidden]{display:none}
+  .sheet{background:var(--bg);width:100%;max-width:560px;max-height:85vh;border-radius:20px 20px 0 0;
+    display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}
+  .sheet-head{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 8px}
+  .sheet-head h3{margin:0;font-size:20px}
+  .sheet-close{border:none;background:var(--line);color:var(--ink);width:36px;height:36px;border-radius:50%;font-size:22px;cursor:pointer}
+  .sheet-body{overflow-y:auto;padding:0 16px 24px}
+  .sheet-body h4{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:16px 4px 8px}
+  .sheet-body p{color:var(--muted);font-size:14px;margin:4px 4px 10px;line-height:1.4}
+  .srow{display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;min-height:56px;border-top:1px solid var(--line)}
+  .srow:first-child{border-top:none}
+  .srow .nm{flex:1;min-width:0;font-weight:500;overflow-wrap:anywhere}
+  .srow select{flex:none;max-width:52%;font:inherit;font-size:15px;color:var(--ink);background:var(--bg);
+    border:1px solid var(--line);border-radius:10px;padding:8px}
+  .srow .x{flex:none;border:none;background:none;color:var(--muted);width:36px;height:40px;font-size:20px;cursor:pointer}
+  .sheet-actions{display:flex;gap:8px;margin-top:14px}
+  .sheet-actions button{flex:1;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;
+    padding:12px;font:inherit;font-size:14px;cursor:pointer}
   .toast{position:fixed;left:50%;bottom:150px;transform:translateX(-50%) translateY(20px);opacity:0;
     background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:12px;font-size:14px;
     transition:all .2s;pointer-events:none;display:flex;gap:12px;align-items:center;z-index:5}
@@ -102,7 +136,7 @@
       <h1>Handleliste</h1>
       <div class="count" id="count">&nbsp;</div>
     </div>
-    
+    <button class="sortbtn" id="sortBtn" type="button" hidden>Sorter <span class="badge" id="sortBadge"></span></button>
   </header>
   <main id="list"></main>
 </div>
@@ -117,6 +151,15 @@
     </form>
   </div>
 </div>
+<div class="sheet-bg" id="sheetBg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div class="sheet-head">
+      <h3 id="sheetTitle">Sorter varer</h3>
+      <button class="sheet-close" id="sheetClose" type="button" aria-label="Lukk">×</button>
+    </div>
+    <div class="sheet-body" id="sheetBody"></div>
+  </div>
+</div>
 <div class="toast" id="toast"><span id="toastText"></span><button id="undo" type="button">Angre</button></div>
 
 <script src="products.js"></script>
@@ -129,6 +172,7 @@ const CAT_EMOJI = Object.fromEntries(CATEGORIES.map(([k,l])=>[k,l.split(" ")[0]]
 function normCat(c){ c=CAT_ALIAS[c]||c; return CAT_ORDER.includes(c)?c:"annet"; }
 function guessCat(name){
   const key=name.toLowerCase().trim();
+  if(customCats[key]) return normCat(customCats[key]);
   if(CATALOG_BY_KEY[key]) return CATALOG_BY_KEY[key].cat;
   const words=key.split(/[\s,.\-\/]+/).filter(Boolean);
   // 1) helt ord som finnes i varelista ("økologisk melk" → melk)
@@ -156,6 +200,7 @@ function suggestions(q){
   for(const [k,v] of Object.entries(history)){
     const e=pool.get(k); if(e) e.n=v.n; else pool.set(k,{name:v.name,cat:guessCat(v.name),n:v.n});
   }
+  for(const [k,c] of Object.entries(customCats)){ const e=pool.get(k); if(e) e.cat=normCat(c); }
   const out=[];
   for(const [k,e] of pool){
     if(onList.has(k)) continue;
@@ -193,6 +238,7 @@ function parseInput(raw){
 
 // ---------- Lagring ----------
 const LS_ITEMS="handleliste.items.v1", LS_HIST="handleliste.history.v1";
+const LS_CUSTOM="handleliste.customcats.v1", LS_UNCAT="handleliste.uncategorized.v1";
 function lsGet(k,fb){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):fb; }catch(e){ return fb; } }
 function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
 
@@ -201,6 +247,8 @@ let mode = "local";       // "local" | "db"
 let col = null;
 let canWrite = true;
 let history = lsGet(LS_HIST,{}); // name -> count
+let customCats = lsGet(LS_CUSTOM,{}); // varenavn (små bokstaver) -> kategori du har valgt selv
+let uncat = lsGet(LS_UNCAT,{});       // varenavn -> {name, n} som havnet i «Annet»
 
 const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 
@@ -235,6 +283,9 @@ function addItem(raw){
   }
   const id=uid();
   const data={name,qty,cat:guessCat(name),done:false,createdAt:Date.now()};
+  if(data.cat==="annet" && !customCats[key]){
+    uncat[key]={name, n:((uncat[key]&&uncat[key].n)||0)+1}; lsSet(LS_UNCAT,uncat);
+  }
   if(mode==="db"){ items[id]=data; render(); }
   writeItem(id,data);
 }
@@ -287,10 +338,37 @@ document.getElementById("undo").addEventListener("click",undo);
 const esc = s => String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const CHECK_SVG='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
+let expanded=null; // id til varen som viser + / −
+function splitQty(q){
+  const m=String(q||"").trim().match(/^(\d+(?:[.,]\d+)?)\s*(.*)$/);
+  return m ? {n:parseFloat(m[1].replace(",",".")), unit:m[2]} : {n:0, unit:String(q||"").trim()};
+}
+function qtyStep(unit){ const u=unit.toLowerCase(); return u==="g"?100 : (u==="kg"||u==="l"||u==="liter")?0.5 : 1; }
+function fmtQty(n,unit){
+  if(n<=0) return unit && !/^(stk|pk)$/i.test(unit) ? "" : "";
+  const num=String(Math.round(n*10)/10).replace(".",",");
+  return unit ? `${num} ${unit}` : num;
+}
+function changeQty(id,dir){
+  const it=items[id]; if(!it||!canWrite) return;
+  const {n,unit}=splitQty(it.qty); const step=qtyStep(unit);
+  let next = (n||(dir>0?(unit?0:1):0)) + dir*step;
+  if(n===0 && dir>0 && !unit) next=2;           // ingen antall = 1 stk, + gir 2
+  if(dir<0 && n<=step) next=0;                    // ned til «ingen antall»
+  const data={...it, qty: next>0 ? fmtQty(next,unit) : (unit&&!/^(stk|pk)$/i.test(unit)?"":"")};
+  if(mode==="db"){ items[id]=data; render(); }
+  writeItem(id,data);
+}
 function row(id,it){
-  return `<li class="${it.done?"done":""}" data-id="${esc(id)}">
-    <div class="check">${CHECK_SVG}</div>
-    <div class="main" data-act="toggle"><span class="name">${esc(it.name)}</span>${it.qty?`<span class="qty">${esc(it.qty)}</span>`:""}</div>
+  const open = expanded===id && canWrite;
+  const {n}=splitQty(it.qty);
+  return `<li class="${it.done?"done":""}${open?" open":""}" data-id="${esc(id)}">
+    <button class="check" data-act="toggle" type="button" aria-label="${it.done?"Fjern avkrysning for":"Kryss av"} ${esc(it.name)}">${CHECK_SVG}</button>
+    <div class="main" data-act="expand"><span class="name">${esc(it.name)}</span>${it.qty&&!open?`<span class="qty">${esc(it.qty)}</span>`:""}</div>
+    ${open?`<div class="stepper">
+      <button type="button" data-act="dec" aria-label="Færre" ${n?"":"disabled"}>−</button>
+      <span class="sq">${esc(it.qty||"1")}</span>
+      <button type="button" data-act="inc" aria-label="Flere">+</button></div>`:""}
     ${canWrite?`<button class="del" data-act="del" aria-label="Fjern ${esc(it.name)}">×</button>`:""}
   </li>`;
 }
@@ -310,7 +388,7 @@ function render(){
     for(const c of CAT_ORDER){
       if(!byCat[c]) continue;
       byCat[c].sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0));
-      html+=`<section class="group"><h2>${CAT_LABEL[c]}</h2><ul>${byCat[c].map(e=>row(...e)).join("")}</ul></section>`;
+      html+=`<section class="group"><h2>${CAT_LABEL[c]}${c==="annet"&&canWrite?`<button class="h2link" data-open-sort type="button">Velg kategori →</button>`:""}</h2><ul>${byCat[c].map(e=>row(...e)).join("")}</ul></section>`;
     }
     if(done.length){
       done.sort((a,b)=>a[1].name.localeCompare(b[1].name,"no"));
@@ -321,6 +399,7 @@ function render(){
     const cb=document.getElementById("clearBtn"); if(cb) cb.onclick=clearDone;
   }
   renderChips();
+  renderSortBtn();
   document.getElementById("input").disabled=!canWrite;
   document.getElementById("input").placeholder=canWrite?"Legg til vare, f.eks. «2 melk»":"Du har bare lesetilgang";
 }
@@ -338,8 +417,12 @@ document.getElementById("list").addEventListener("click",e=>{
   const act=e.target.closest("[data-act]"); const li=e.target.closest("li");
   if(!li) return;
   const id=li.dataset.id;
-  if(act&&act.dataset.act==="del") del(id);
-  else toggle(id);
+  const a=act&&act.dataset.act;
+  if(a==="del"){ if(expanded===id) expanded=null; del(id); }
+  else if(a==="toggle") toggle(id);
+  else if(a==="inc") changeQty(id,1);
+  else if(a==="dec") changeQty(id,-1);
+  else if(a==="expand"&&canWrite){ expanded = expanded===id ? null : id; render(); }
 });
 document.getElementById("chips").addEventListener("click",e=>{
   const b=e.target.closest(".chip"); if(b) addItem(b.dataset.name);
@@ -356,6 +439,72 @@ document.getElementById("form").addEventListener("submit",e=>{
   if(!input.value.trim()) return;
   addItem(input.value); input.value=""; addBtn.disabled=true; renderSuggest(); input.focus();
 });
+
+// ---------- Sortering av «Annet» ----------
+function catOptions(sel){
+  return `<option value="" ${sel?"":"selected"} disabled>Velg kategori…</option>`+
+    CATEGORIES.filter(([k])=>k!=="annet").map(([k,l])=>`<option value="${k}" ${k===sel?"selected":""}>${esc(l)}</option>`).join("")+
+    `<option value="annet" ${sel==="annet"?"selected":""}>🛒 Behold i Annet</option>`;
+}
+function renderSortBtn(){
+  const n=Object.keys(uncat).length;
+  const btn=document.getElementById("sortBtn");
+  btn.hidden = !canWrite || (n===0 && Object.keys(customCats).length===0);
+  document.getElementById("sortBadge").textContent = n||"";
+}
+function renderSheet(){
+  const un=Object.entries(uncat).sort((a,b)=>b[1].n-a[1].n||a[1].name.localeCompare(b[1].name,"no"));
+  const mine=Object.entries(customCats).sort((a,b)=>a[0].localeCompare(b[0],"no"));
+  const nameOf=k=>(uncat[k]&&uncat[k].name)||(history[k]&&history[k].name)||(k.charAt(0).toUpperCase()+k.slice(1));
+  let h="";
+  h+=`<h4>Ikke sortert (${un.length})</h4>`;
+  if(un.length){
+    h+=`<p>Varer appen ikke kjente igjen. Velg kategori én gang, så husker appen det neste gang.</p><ul>`+
+      un.map(([k,v])=>`<li class="srow" data-key="${esc(k)}"><span class="nm">${esc(v.name)}</span>
+        <select data-key="${esc(k)}" aria-label="Kategori for ${esc(v.name)}">${catOptions("")}</select>
+        <button class="x" data-forget="${esc(k)}" type="button" aria-label="Fjern fra lista">×</button></li>`).join("")+`</ul>`;
+  } else h+=`<p>Alt er sortert 🎉</p>`;
+  if(mine.length){
+    h+=`<h4>Dine kategorier (${mine.length})</h4><p>Varer du har sortert selv. Du kan endre dem her.</p><ul>`+
+      mine.map(([k,c])=>`<li class="srow"><span class="nm">${esc(nameOf(k))}</span>
+        <select data-key="${esc(k)}" aria-label="Kategori for ${esc(nameOf(k))}">${catOptions(normCat(c))}</select>
+        <button class="x" data-unlearn="${esc(k)}" type="button" aria-label="Glem kategori">×</button></li>`).join("")+`</ul>
+      <div class="sheet-actions"><button type="button" id="copyCats">Kopier som tekst</button></div>
+      <p>Send teksten til Claude, så kan varene bygges inn i varelista for godt.</p>`;
+  }
+  document.getElementById("sheetBody").innerHTML=h;
+  const cp=document.getElementById("copyCats");
+  if(cp) cp.onclick=async()=>{
+    const txt=mine.map(([k,c])=>`${nameOf(k)} → ${(CAT_LABEL[normCat(c)]||"").replace(/^\S+\s/,"")}`).join("\n");
+    try{ await navigator.clipboard.writeText(txt); showToast("Kopiert",false); }catch(e){ showToast("Kunne ikke kopiere",false); }
+  };
+}
+function openSheet(){ renderSheet(); document.getElementById("sheetBg").hidden=false; }
+function closeSheet(){ document.getElementById("sheetBg").hidden=true; }
+function setCategory(key,cat){
+  const name=(uncat[key]&&uncat[key].name)||key;
+  customCats[key]=cat; lsSet(LS_CUSTOM,customCats);
+  delete uncat[key]; lsSet(LS_UNCAT,uncat);
+  // flytt varer som står på lista nå
+  for(const [id,it] of Object.entries(items)){
+    if(it.name.toLowerCase()===key && normCat(it.cat)!==cat) writeItem(id,{...it,cat});
+  }
+  render(); renderSheet();
+  if(cat!=="annet") showToast(`«${name}» → ${(CAT_LABEL[cat]||"").replace(/^\S+\s/,"")}`,false);
+}
+document.getElementById("sortBtn").addEventListener("click",openSheet);
+document.getElementById("list").addEventListener("click",e=>{ if(e.target.closest("[data-open-sort]")){ e.stopPropagation(); openSheet(); } },true);
+document.getElementById("sheetClose").addEventListener("click",closeSheet);
+document.getElementById("sheetBg").addEventListener("click",e=>{ if(e.target.id==="sheetBg") closeSheet(); });
+document.getElementById("sheetBody").addEventListener("change",e=>{
+  const sel=e.target.closest("select[data-key]"); if(sel&&sel.value) setCategory(sel.dataset.key,sel.value);
+});
+document.getElementById("sheetBody").addEventListener("click",e=>{
+  const f=e.target.closest("[data-forget]"); const u=e.target.closest("[data-unlearn]");
+  if(f){ delete uncat[f.dataset.forget]; lsSet(LS_UNCAT,uncat); renderSheet(); renderSortBtn(); }
+  if(u){ delete customCats[u.dataset.unlearn]; lsSet(LS_CUSTOM,customCats); renderSheet(); renderSortBtn(); }
+});
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeSheet(); });
 
 // ---------- Oppstart ----------
 items = lsGet(LS_ITEMS,{});
