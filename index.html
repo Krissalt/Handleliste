@@ -103,6 +103,18 @@
   .sortbtn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;
     padding:8px 12px;font:inherit;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px}
   .sortbtn[hidden]{display:none}
+  .hbtns{display:flex;gap:8px}
+  .field{display:block;width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--card);
+    border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+  .field:focus{outline:2px solid var(--accent);outline-offset:-1px}
+  textarea.field{min-height:180px;resize:vertical;font-size:14px;line-height:1.45;font-family:ui-monospace,monospace}
+  .bigbtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:none;border-radius:12px;
+    padding:14px;font:inherit;font-size:16px;font-weight:600;cursor:pointer;margin-bottom:8px;text-decoration:none}
+  .bigbtn.primary{background:var(--accent);color:#fff}
+  .bigbtn.secondary{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+  .chk{display:flex;align-items:center;gap:10px;margin:2px 4px 12px;font-size:15px}
+  .chk{justify-content:flex-start}
+  .chk input{flex:none;width:20px;height:20px;padding:0;margin:0;accent-color:var(--accent)}
   .badge{background:var(--accent);color:#fff;border-radius:999px;font-size:12px;font-weight:600;padding:1px 7px;min-width:20px;text-align:center}
   .badge:empty{display:none}
   .h2link{margin-left:auto;border:none;background:none;color:var(--accent);font:inherit;font-size:12px;
@@ -140,7 +152,11 @@
       <h1>Handleliste</h1>
       <div class="count" id="count">&nbsp;</div>
     </div>
-    <button class="sortbtn" id="sortBtn" type="button" hidden>Sorter <span class="badge" id="sortBadge"></span></button>
+    <div class="hbtns">
+      <button class="sortbtn" id="sortBtn" type="button" hidden>Sorter <span class="badge" id="sortBadge"></span></button>
+      <button class="sortbtn" id="shareBtn" type="button" hidden aria-label="Del eller send lista">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>Del</button>
+    </div>
   </header>
   <main id="list"></main>
 </div>
@@ -405,6 +421,7 @@ function render(){
   }
   renderChips();
   renderSortBtn();
+  if(typeof renderShareBtn==="function") renderShareBtn();
   document.getElementById("input").disabled=!canWrite;
   document.getElementById("input").placeholder=canWrite?"Legg til vare, f.eks. «2 melk»":"Du har bare lesetilgang";
 }
@@ -484,7 +501,7 @@ function renderSheet(){
     try{ await navigator.clipboard.writeText(txt); showToast("Kopiert",false); }catch(e){ showToast("Kunne ikke kopiere",false); }
   };
 }
-function openSheet(){ renderSheet(); document.getElementById("sheetBg").hidden=false; }
+function openSheet(){ document.getElementById("sheetTitle").textContent="Sorter varer"; renderSheet(); document.getElementById("sheetBg").hidden=false; }
 function closeSheet(){ document.getElementById("sheetBg").hidden=true; }
 function setCategory(key,cat){
   const name=(uncat[key]&&uncat[key].name)||key;
@@ -519,6 +536,63 @@ document.addEventListener("click",e=>{
   if(li) return; // en annen vare – lista håndterer det selv
   expanded=null; render();
 });
+
+// ---------- Del / send på e-post ----------
+const LS_MAIL="handleliste.mailto.v1";
+function shareText(includeDone){
+  const list=Object.values(items).filter(it=>it&&it.name&&(includeDone||!it.done));
+  const d=new Date().toLocaleDateString("no-NO",{weekday:"long",day:"numeric",month:"long"});
+  let t=`Handleliste – ${d}\n`;
+  const byCat={};
+  for(const it of list){ const c=normCat(it.cat); (byCat[c]=byCat[c]||[]).push(it); }
+  for(const c of CAT_ORDER){
+    if(!byCat[c]) continue;
+    byCat[c].sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+    t+=`\n${(CAT_LABEL[c]||"").replace(/^\S+\s/,"").toUpperCase()}\n`;
+    for(const it of byCat[c]){
+      const q=(it.qty||"").trim(); const qq=/^\d+([.,]\d+)?$/.test(q)?q+" stk":q;
+      t+=`- ${it.name}${qq?` – ${qq}`:""}\n`;
+    }
+  }
+  t+=`\nTotalt ${list.length} ${list.length===1?"vare":"varer"}.\n`;
+  return t;
+}
+function openShare(){
+  const to=lsGet(LS_MAIL,"");
+  const anyDone=Object.values(items).some(it=>it.done);
+  document.getElementById("sheetTitle").textContent="Send lista";
+  document.getElementById("sheetBody").innerHTML=`
+    <h4>Til (e-post)</h4>
+    <input class="field" id="mailTo" type="email" inputmode="email" autocomplete="email" placeholder="kjopmann@butikk.no" value="${esc(to)}">
+    <h4>Emne</h4>
+    <input class="field" id="mailSubj" value="Handleliste">
+    ${anyDone?`<label class="chk"><input type="checkbox" id="inclDone"> Ta med varer som er krysset av</label>`:""}
+    <h4>Melding</h4>
+    <textarea class="field" id="mailBody">${esc(shareText(false))}</textarea>
+    <a class="bigbtn primary" id="mailGo" href="#">✉️ Åpne i e-post</a>
+    ${navigator.share?`<button class="bigbtn secondary" id="shareGo" type="button">Del med en annen app…</button>`:""}
+    <button class="bigbtn secondary" id="copyGo" type="button">Kopier teksten</button>
+    <p>E-postappen åpnes med alt ferdig utfylt – du trykker bare «Send». Adressen huskes til neste gang.</p>`;
+  const $=id=>document.getElementById(id);
+  const inc=$("inclDone"); if(inc) inc.onchange=()=>{ $("mailBody").value=shareText(inc.checked); };
+  $("mailTo").onchange=()=>lsSet(LS_MAIL,$("mailTo").value.trim());
+  $("mailGo").onclick=e=>{
+    const to=$("mailTo").value.trim(); lsSet(LS_MAIL,to);
+    e.currentTarget.href=`mailto:${encodeURIComponent(to).replace(/%40/g,"@")}?subject=${encodeURIComponent($("mailSubj").value)}&body=${encodeURIComponent($("mailBody").value)}`;
+  };
+  const sg=$("shareGo"); if(sg) sg.onclick=async()=>{
+    try{ await navigator.share({title:$("mailSubj").value,text:$("mailBody").value}); }catch(e){}
+  };
+  $("copyGo").onclick=async()=>{
+    try{ await navigator.clipboard.writeText($("mailBody").value); showToast("Kopiert",false); }
+    catch(e){ $("mailBody").select(); showToast("Merk teksten og kopier",false); }
+  };
+  document.getElementById("sheetBg").hidden=false;
+}
+function renderShareBtn(){
+  document.getElementById("shareBtn").hidden = !Object.keys(items).length;
+}
+document.getElementById("shareBtn").addEventListener("click",openShare);
 
 // ---------- Plass til skrivefeltet nederst ----------
 (function(){
