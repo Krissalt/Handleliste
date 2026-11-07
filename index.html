@@ -73,6 +73,7 @@
     border-radius:10px;font-size:22px;cursor:pointer}
   .del:active{background:var(--line)}
 
+  .ver{text-align:center;color:var(--muted);font-size:11px;opacity:.7;margin-top:18px}
   .empty{text-align:center;color:var(--muted);padding:60px 20px}
   .empty .big{font-size:44px;margin-bottom:8px}
 
@@ -166,6 +167,7 @@
     </div>
   </header>
   <main id="list"></main>
+  <div class="ver" id="ver"></div>
 </div>
 
 <div class="bar">
@@ -680,9 +682,18 @@ document.getElementById("shareBtn").addEventListener("click",openShare);
 items = lsGet(LS_ITEMS,{});
 render();
 
+const APP_VERSION="9";
 if("serviceWorker" in navigator){
-  window.addEventListener("load",()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); });
+  // Last siden på nytt én gang når en ny versjon tar over
+  const hadController=!!navigator.serviceWorker.controller; let reloaded=false;
+  navigator.serviceWorker.addEventListener("controllerchange",()=>{ if(hadController&&!reloaded){ reloaded=true; location.reload(); } });
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).then(r=>{
+      document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") r.update().catch(()=>{}); });
+    }).catch(()=>{});
+  });
 }
+document.getElementById("ver").textContent="Versjon "+APP_VERSION;
 </script>
 </body>
 </html>
