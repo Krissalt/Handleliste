@@ -51,6 +51,9 @@
     color:var(--ink);font:inherit;font-size:22px;line-height:1;cursor:pointer;display:grid;place-items:center}
   .stepper button:active{background:var(--line)}
   .stepper button:disabled{opacity:.35}
+  .pill{flex:none;background:var(--accent-soft);color:var(--accent);font-weight:600;font-size:14px;
+    border-radius:999px;padding:5px 10px;cursor:pointer;white-space:nowrap}
+  li.done .pill{background:none;color:var(--muted)}
   .sq{min-width:34px;text-align:center;font-weight:600;font-size:15px}
   .check svg{opacity:0;transition:opacity .15s}
   li.done .check{background:var(--accent);border-color:var(--accent)}
@@ -365,7 +368,8 @@ function row(id,it){
   const {n}=splitQty(it.qty);
   return `<li class="${it.done?"done":""}${open?" open":""}" data-id="${esc(id)}">
     <button class="check" data-act="toggle" type="button" aria-label="${it.done?"Fjern avkrysning for":"Kryss av"} ${esc(it.name)}">${CHECK_SVG}</button>
-    <div class="main" data-act="expand"><span class="name">${esc(it.name)}</span>${it.qty&&!open?`<span class="qty">${esc(it.qty)}</span>`:""}</div>
+    <div class="main" data-act="expand"><span class="name">${esc(it.name)}</span></div>
+    ${it.qty&&!open?`<span class="pill" data-act="expand">${esc(/^\d+([.,]\d+)?$/.test(it.qty.trim())?it.qty.trim()+" stk":it.qty)}</span>`:""}
     ${open?`<div class="stepper">
       <button type="button" data-act="dec" aria-label="Færre" ${n?"":"disabled"}>−</button>
       <span class="sq">${esc(it.qty||"1")}</span>
@@ -420,7 +424,7 @@ document.getElementById("list").addEventListener("click",e=>{
   const id=li.dataset.id;
   const a=act&&act.dataset.act;
   if(a==="del"){ if(expanded===id) expanded=null; del(id); }
-  else if(a==="toggle") toggle(id);
+  else if(a==="toggle"){ expanded=null; toggle(id); }
   else if(a==="inc") changeQty(id,1);
   else if(a==="dec") changeQty(id,-1);
   else if(a==="expand"&&canWrite){ expanded = expanded===id ? null : id; render(); }
@@ -438,7 +442,7 @@ document.getElementById("suggest").addEventListener("click",e=>{
 document.getElementById("form").addEventListener("submit",e=>{
   e.preventDefault();
   if(!input.value.trim()) return;
-  addItem(input.value); input.value=""; addBtn.disabled=true; renderSuggest(); input.focus();
+  expanded=null; addItem(input.value); input.value=""; addBtn.disabled=true; renderSuggest(); input.focus();
 });
 
 // ---------- Sortering av «Annet» ----------
@@ -506,6 +510,15 @@ document.getElementById("sheetBody").addEventListener("click",e=>{
   if(u){ delete customCats[u.dataset.unlearn]; lsSet(LS_CUSTOM,customCats); renderSheet(); renderSortBtn(); }
 });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeSheet(); });
+
+// Trykk utenfor en åpen vare lukker + / −
+document.addEventListener("click",e=>{
+  if(!expanded) return;
+  const li=e.target.closest("li[data-id]");
+  if(li && li.dataset.id===expanded) return;
+  if(li) return; // en annen vare – lista håndterer det selv
+  expanded=null; render();
+});
 
 // ---------- Plass til skrivefeltet nederst ----------
 (function(){
