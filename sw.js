@@ -1,4 +1,4 @@
-const VERSION = "9";
+const VERSION = "10";
 const CACHE = "handleliste-v" + VERSION;
 const FILES = ["./", "./index.html", "./products.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 self.addEventListener("install", e => {
