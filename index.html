@@ -46,6 +46,13 @@
     display:grid;place-items:center;transition:all .15s;cursor:pointer;position:relative}
   .check::after{content:"";position:absolute;inset:-14px}
   li.open{background:var(--accent-soft)}
+  li{-webkit-touch-callout:none}
+  li.editing{background:var(--accent-soft);padding:6px 6px 6px 10px;gap:8px}
+  .rename{flex:1;min-width:0;font:inherit;font-size:16px;font-weight:500;color:var(--ink);background:var(--card);
+    border:2px solid var(--accent);border-radius:10px;padding:10px 12px}
+  .rename:focus{outline:none}
+  .savebtn{flex:none;border:none;background:var(--accent);color:#fff;border-radius:10px;padding:0 14px;height:44px;
+    font:inherit;font-weight:600;cursor:pointer}
   .stepper{flex:none;display:flex;align-items:center;gap:4px}
   .stepper button{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--card);
     color:var(--ink);font:inherit;font-size:22px;line-height:1;cursor:pointer;display:grid;place-items:center}
@@ -379,7 +386,14 @@ function changeQty(id,dir){
   if(mode==="db"){ items[id]=data; render(); }
   writeItem(id,data);
 }
+let editing=null; // id til varen som får nytt navn
 function row(id,it){
+  if(editing===id && canWrite){
+    return `<li class="editing" data-id="${esc(id)}">
+      <input class="rename" id="renameInput" value="${esc(it.name)}" maxlength="80" enterkeyhint="done" aria-label="Nytt navn for ${esc(it.name)}">
+      <button class="savebtn" data-act="save" type="button">Lagre</button>
+    </li>`;
+  }
   const open = expanded===id && canWrite;
   const {n}=splitQty(it.qty);
   return `<li class="${it.done?"done":""}${open?" open":""}" data-id="${esc(id)}">
@@ -421,6 +435,8 @@ function render(){
   }
   renderChips();
   renderSortBtn();
+  const ri=document.getElementById("renameInput");
+  if(ri && document.activeElement!==ri){ ri.focus(); ri.select(); }
   if(typeof renderShareBtn==="function") renderShareBtn();
   document.getElementById("input").disabled=!canWrite;
   document.getElementById("input").placeholder=canWrite?"Legg til vare, f.eks. «2 melk»":"Du har bare lesetilgang";
@@ -440,6 +456,8 @@ document.getElementById("list").addEventListener("click",e=>{
   if(!li) return;
   const id=li.dataset.id;
   const a=act&&act.dataset.act;
+  if(suppressClick){ suppressClick=false; return; }
+  if(li.classList.contains("editing")){ if(a==="save") saveRename(); return; }
   if(a==="del"){ if(expanded===id) expanded=null; del(id); }
   else if(a==="toggle"){ expanded=null; toggle(id); }
   else if(a==="inc") changeQty(id,1);
@@ -535,6 +553,62 @@ document.addEventListener("click",e=>{
   if(li && li.dataset.id===expanded) return;
   if(li) return; // en annen vare – lista håndterer det selv
   expanded=null; render();
+});
+
+// ---------- Hold inne for å endre navn ----------
+let pressTimer=null, pressStart=null, suppressClick=false;
+function startRename(id){
+  if(!canWrite||!items[id]) return;
+  expanded=null; editing=id;
+  try{ navigator.vibrate&&navigator.vibrate(15); }catch(e){}
+  render();
+}
+function saveRename(){
+  const id=editing; if(!id) return;
+  const ri=document.getElementById("renameInput");
+  const it=items[id]; editing=null;
+  if(!ri||!it){ render(); return; }
+  const nn=ri.value.trim().replace(/\s+/g," ");
+  if(!nn || nn===it.name){ render(); return; }
+  const name=nn.charAt(0).toUpperCase()+nn.slice(1);
+  const oldKey=it.name.toLowerCase(), newKey=name.toLowerCase();
+  // skrivefeilen skal ikke dukke opp som forslag eller i «Ikke sortert»
+  if(history[oldKey]){ const n=history[oldKey].n; delete history[oldKey]; history[newKey]={name,n:Math.max(n,(history[newKey]&&history[newKey].n)||0)}; lsSet(LS_HIST,history); }
+  if(uncat[oldKey]){ delete uncat[oldKey]; lsSet(LS_UNCAT,uncat); }
+  const cat=guessCat(name);
+  if(cat==="annet" && !customCats[newKey]){ uncat[newKey]={name,n:1}; lsSet(LS_UNCAT,uncat); }
+  const data={...it,name,cat};
+  if(mode==="db"){ items[id]=data; render(); }
+  writeItem(id,data);
+  showToast(`Endret til «${name}»`,false);
+}
+function cancelRename(){ editing=null; render(); }
+const listEl=document.getElementById("list");
+listEl.addEventListener("pointerdown",e=>{
+  suppressClick=false; // et nytt trykk – ikke svelg det
+  const li=e.target.closest("li[data-id]");
+  if(!li||li.classList.contains("editing")||e.target.closest("button")) return;
+  pressStart={x:e.clientX,y:e.clientY};
+  clearTimeout(pressTimer);
+  pressTimer=setTimeout(()=>{ pressTimer=null; suppressClick=true; startRename(li.dataset.id); },500);
+});
+const cancelPress=e=>{
+  if(!pressTimer) return;
+  if(e.type==="pointermove" && pressStart && Math.hypot(e.clientX-pressStart.x,e.clientY-pressStart.y)<10) return;
+  clearTimeout(pressTimer); pressTimer=null;
+};
+["pointerup","pointercancel","pointerleave","pointermove"].forEach(t=>listEl.addEventListener(t,cancelPress));
+listEl.addEventListener("contextmenu",e=>{ if(e.target.closest("li[data-id]")) e.preventDefault(); });
+listEl.addEventListener("keydown",e=>{
+  if(e.target.id!=="renameInput") return;
+  if(e.key==="Enter"){ e.preventDefault(); saveRename(); }
+  if(e.key==="Escape"){ e.preventDefault(); cancelRename(); }
+});
+listEl.addEventListener("focusout",e=>{
+  if(e.target.id==="renameInput" && editing){
+    // vent litt, så et trykk på «Lagre» rekker å registreres
+    setTimeout(()=>{ if(editing && document.activeElement?.id!=="renameInput") saveRename(); },120);
+  }
 });
 
 // ---------- Del / send på e-post ----------
