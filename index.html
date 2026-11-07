@@ -2,7 +2,7 @@
 <html lang="no">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#1f6f4a">
 <title>Handleliste</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -22,7 +22,7 @@
       --accent:#4fb784; --accent-soft:#1f3329; --danger:#ef7a66; }
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{margin:0;background:var(--bg);color:var(--ink);
+  html,body{margin:0;overflow-x:hidden;background:var(--bg);color:var(--ink);
     font-family:Inter,system-ui,-apple-system,sans-serif;font-size:16px}
   body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
   .wrap{max-width:560px;margin:0 auto;padding:18px 16px 140px}
@@ -505,6 +505,14 @@ document.getElementById("sheetBody").addEventListener("click",e=>{
   if(u){ delete customCats[u.dataset.unlearn]; lsSet(LS_CUSTOM,customCats); renderSheet(); renderSortBtn(); }
 });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeSheet(); });
+
+// ---------- Plass til skrivefeltet nederst ----------
+(function(){
+  const bar=document.querySelector(".bar"), wrap=document.querySelector(".wrap");
+  const fit=()=>{ wrap.style.paddingBottom=(bar.offsetHeight+24)+"px"; };
+  try{ new ResizeObserver(fit).observe(bar); }catch(e){ window.addEventListener("resize",fit); }
+  fit();
+})();
 
 // ---------- Oppstart ----------
 items = lsGet(LS_ITEMS,{});
