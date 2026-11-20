@@ -1,6 +1,6 @@
-# Handleliste
+# Loadout
 
-Enkel handleliste-app for mobil. Ingen innlogging – lista lagres på telefonen og virker uten nett.
+Loadout (tidligere Handleliste) er en enkel handleliste-app for mobil. Ingen innlogging – lista lagres på telefonen og virker uten nett.
 
 **Åpne appen:** https://krissalt.github.io/Handleliste/
 

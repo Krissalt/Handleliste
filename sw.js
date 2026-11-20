@@ -1,6 +1,6 @@
-const VERSION = "10";
+const VERSION = "11";
 const CACHE = "handleliste-v" + VERSION;
-const FILES = ["./", "./index.html", "./products.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
+const FILES = ["./", "./index.html", "./products.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png", "./icon.svg"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES.map(f => new Request(f, { cache: "reload" })))));
   self.skipWaiting();
