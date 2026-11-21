@@ -19,3 +19,7 @@ Legg den på hjemskjermen: åpne lenken på mobilen → Del/meny → «Legg til 
 - Varer som havner i «Annet» samles under «Sorter» – velg kategori én gang, så huskes den
 - Hurtigknapper for varer du har kjøpt før
 - Angre sletting, mørk modus, virker offline
+
+## Ny versjon
+1. Legg til en ny oppføring øverst i `changelog.js` (versjonsnummer, dato, hva som er endret). Appen viser det øverste nummeret.
+2. Sett samme nummer i `VERSION` øverst i `sw.js`, så telefonene henter den nye versjonen.
