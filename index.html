@@ -98,6 +98,7 @@
   .sugg:active{background:var(--accent-soft)}
   .sugg-emoji{flex:none;width:22px;text-align:center}
   .sugg-name{font-weight:500}
+  .onlist{color:var(--accent);font-weight:600}
   .sugg-cat{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
   .cam{flex:none;border:none;background:none;color:var(--muted);width:44px;height:44px;border-radius:12px;
     display:grid;place-items:center;cursor:pointer}
@@ -254,7 +255,7 @@ function suggestions(q){
   for(const [k,c] of Object.entries(customCats)){ const e=pool.get(k); if(e) e.cat=normCat(c); }
   const out=[];
   for(const [k,e] of pool){
-    if(onList.has(k)) continue;
+    e.on = onList.has(k);
     const f=fold(e.name); let score;
     if(f===q) score=0; else if(f.startsWith(q)) score=1;
     else if(f.split(/[\s\-]+/).some(w=>w.startsWith(q))) score=2;
@@ -274,13 +275,13 @@ function renderSuggest(){
   if(input.value.trim()===""){ renderChips(); }
   el.innerHTML=list.map(s=>`<button type="button" class="sugg" data-name="${esc(s.name)}" data-qty="${esc(qty)}">
     <span class="sugg-emoji">${CAT_EMOJI[s.cat]||"🛒"}</span><span class="sugg-name">${esc(s.name)}</span>${qty?`<span class="qty">${esc(qty)}</span>`:""}
-    <span class="sugg-cat">${esc((CAT_LABEL[s.cat]||"").replace(/^\S+\s/,""))}</span></button>`).join("");
+    <span class="sugg-cat">${s.on?`<b class="onlist">På lista${(()=>{ const it=Object.values(items).find(x=>!x.done&&x.name.toLowerCase()===s.name.toLowerCase()); return it&&it.qty?" · "+esc(/^\d+([.,]\d+)?$/.test(it.qty.trim())?it.qty.trim()+" stk":it.qty):""; })()} · +</b>`:esc((CAT_LABEL[s.cat]||"").replace(/^\S+\s/,""))}</span></button>`).join("");
 }
 
 function parseInput(raw){
   let s = raw.trim().replace(/\s+/g," ");
   let qty = "";
-  let m = s.match(/^(\d+[.,]?\d*\s?(?:stk|pk|kg|g|l|dl|liter|pakker?|pakke|boks(?:er)?|flasker?|poser?|pose|fedd|beger|bunt|glass|skiver?)\.?)\s+(.+)$/i);
+  let m = s.match(/^(\d+[.,]?\d*\s?(?:stk|pk|kg|g|l|dl|liter|pakker?|pakke|boks(?:er)?|flasker?|poser?|pose|fedd|beger|bunt|glass|skiver?)?\.?)\s+(.+)$/i);
   if(m){ qty=m[1]; s=m[2]; }
   else { m = s.match(/^(.+?)\s+[x×]?(\d+[.,]?\d*\s?(?:stk|pk|kg|g|l|dl)?)$/i); if(m){ s=m[1]; qty=m[2]; } }
   s = s.charAt(0).toUpperCase()+s.slice(1);
@@ -322,6 +323,27 @@ function addItem(raw){
   const p = parseInput(raw);
   addParsed(p.name, p.qty);
 }
+// Legg sammen to antall: "2" + "" = "3", "400 g" + "" = "800 g", "1 kg" + "500 g" = "1,5 kg", "2 dl" + "1 l" = "12 dl"
+function sumQty(a,b){
+  a=String(a||"").trim(); b=String(b||"").trim();
+  const A=splitQty(a), B=splitQty(b);
+  const U={gram:"g",gr:"g",liter:"l",pakke:"pk",pakker:"pk",bokser:"boks",poser:"pose",flasker:"flaske",skive:"skiver"};
+  const nu=u=>{ u=u.toLowerCase().replace(/\.$/,""); return U[u]||u; };
+  let au=nu(A.unit), bu=nu(B.unit), an=A.n||(a?0:1), bn=B.n;
+  if(!b){ bn = au && au!=="stk" ? an : 1; bu = au; }      // ingen antall = én til av samme
+  if(!a){ an = 1; au = bu; }
+  if(au==="stk") au=""; if(bu==="stk") bu="";
+  const fmt=(n,u)=>{ n=Math.round(n*100)/100; const t=String(n).replace(".",","); return u? `${t} ${u}` : (n===1?"":t); };
+  if(!an||!bn) return a&&b ? `${a} + ${b}` : (a||b);
+  const conv={g:["g",1],kg:["g",1000],dl:["dl",1],l:["dl",10]};
+  if(au===bu && !conv[au]) return fmt(an+bn,au);
+  if(conv[au]&&conv[bu]&&conv[au][0]===conv[bu][0]){
+    const base=conv[au][0], tot=an*conv[au][1]+bn*conv[bu][1];
+    if(base==="g") return tot>=1000 ? fmt(tot/1000,"kg") : fmt(tot,"g");
+    return tot>=10 && tot%5===0 ? fmt(tot/10,"l") : fmt(tot,"dl");
+  }
+  return `${a} + ${b}`;
+}
 function addParsed(name, qty){
   name=String(name||"").trim().slice(0,80); qty=String(qty||"").trim().slice(0,20);
   if(!name) return;
@@ -333,8 +355,16 @@ function addParsed(name, qty){
   lsSet(LS_HIST,history);
   if(existing){
     const [id,it]=existing;
-    writeItem(id,{...it, done:false, qty:qty||it.qty});
-    if(mode==="db"){ items[id]={...it,done:false,qty:qty||it.qty}; render(); }
+    // Allerede i kurven: den trengs på nytt, med det nye antallet.
+    // Fortsatt på lista: legg antallet til det som står der.
+    const newQty = it.done ? qty : sumQty(it.qty, qty);
+    const data={...it, done:false, qty:newQty};
+    if(mode==="db"){ items[id]=data; render(); }
+    writeItem(id,data);
+    if(!it.done){
+      const show=q=>{ const t=(q||"").trim(); return !t?"1 stk":/^\d+([.,]\d+)?$/.test(t)?t+" stk":t; };
+      showToast(`${it.name}: ${show(it.qty)} → ${show(newQty)}`,false);
+    }
     return;
   }
   const id=uid();
@@ -846,7 +876,7 @@ document.getElementById("shareBtn").addEventListener("click",openShare);
 items = lsGet(LS_ITEMS,{});
 render();
 
-const APP_VERSION="12";
+const APP_VERSION="13";
 if("serviceWorker" in navigator){
   // Last siden på nytt én gang når en ny versjon tar over
   const hadController=!!navigator.serviceWorker.controller; let reloaded=false;
