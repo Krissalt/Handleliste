@@ -14,6 +14,7 @@ Legg den på hjemskjermen: åpne lenken på mobilen → Del/meny → «Legg til 
 - Trykk på ringen for å krysse av, fjern alle avkryssede med én knapp
 - Trykk på navnet for − / + på antall
 - Hold inne på en vare for å endre navnet (rett skrivefeil)
+- 📷 Les ingredienser fra et bilde av en oppskrift (tekstgjenkjenning på telefonen med Tesseract.js, krever nett første gang)
 - Del-knapp: send lista på e-post, del til andre apper eller kopier
 - Varer som havner i «Annet» samles under «Sorter» – velg kategori én gang, så huskes den
 - Hurtigknapper for varer du har kjøpt før

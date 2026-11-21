@@ -99,6 +99,23 @@
   .sugg-emoji{flex:none;width:22px;text-align:center}
   .sugg-name{font-weight:500}
   .sugg-cat{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
+  .cam{flex:none;border:none;background:none;color:var(--muted);width:44px;height:44px;border-radius:12px;
+    display:grid;place-items:center;cursor:pointer}
+  .cam:active{background:var(--line);color:var(--ink)}
+  .rc-img{display:block;width:100%;max-height:180px;object-fit:cover;border-radius:12px;border:1px solid var(--line);margin-bottom:12px}
+  .rc-status{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:15px;margin:8px 4px 14px}
+  .spin{width:18px;height:18px;border-radius:50%;border:2.5px solid var(--line);border-top-color:var(--accent);animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .bar-prog{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin:0 4px 14px}
+  .bar-prog i{display:block;height:100%;background:var(--accent);width:0;transition:width .2s}
+  .rrow{display:flex;align-items:center;gap:8px;padding:6px 8px 6px 12px;min-height:54px;border-top:1px solid var(--line)}
+  .rrow:first-child{border-top:none}
+  .rrow input[type=checkbox]{flex:none;width:22px;height:22px;margin:0;padding:0;accent-color:var(--accent)}
+  .rrow .rn{flex:1;min-width:0;padding:8px;border-radius:8px;font-weight:500}
+  .rrow .rq{flex:none;width:78px;padding:8px;border-radius:8px;text-align:right;color:var(--muted);font-size:15px}
+  .rrow .rn:focus,.rrow .rq:focus{background:var(--bg);outline:1px solid var(--line)}
+  .rrow.off .rn,.rrow.off .rq{opacity:.45;text-decoration:line-through}
+  .linkbtn{border:none;background:none;color:var(--accent);font:inherit;font-size:14px;font-weight:600;cursor:pointer;padding:8px 4px}
   form{display:flex;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:16px;
     padding:6px;box-shadow:0 6px 24px rgba(0,0,0,.08)}
   input{flex:1;min-width:0;border:none;background:none;color:var(--ink);font:inherit;font-size:16px;padding:10px}
@@ -175,6 +192,10 @@
     <div class="suggest" id="suggest" hidden></div>
     <div class="chips" id="chips"></div>
     <form id="form" autocomplete="off">
+      <button class="cam" id="camBtn" type="button" aria-label="Les ingredienser fra bilde av oppskrift">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      </button>
+      <input type="file" id="camFile" accept="image/*" hidden>
       <input id="input" placeholder="Legg til vare, f.eks. «2 melk»" enterkeyhint="done" aria-label="Ny vare">
       <button class="add" id="addBtn" type="submit" aria-label="Legg til" disabled>+</button>
     </form>
@@ -192,6 +213,7 @@
 <div class="toast" id="toast"><span id="toastText"></span><button id="undo" type="button">Angre</button></div>
 
 <script src="products.js"></script>
+<script src="recipe.js"></script>
 <script>
 // ---------- Kategorier (fra products.js) ----------
 const CAT_ORDER = CATEGORIES.map(c=>c[0]);
@@ -258,7 +280,7 @@ function renderSuggest(){
 function parseInput(raw){
   let s = raw.trim().replace(/\s+/g," ");
   let qty = "";
-  let m = s.match(/^(\d+[.,]?\d*\s?(?:stk|pk|kg|g|l|dl|liter|pakker?|bokser?|flasker?|poser?)?)\s+(.+)$/i);
+  let m = s.match(/^(\d+[.,]?\d*\s?(?:stk|pk|kg|g|l|dl|liter|pakker?|pakke|boks(?:er)?|flasker?|poser?|pose|fedd|beger|bunt|glass|skiver?)\.?)\s+(.+)$/i);
   if(m){ qty=m[1]; s=m[2]; }
   else { m = s.match(/^(.+?)\s+[x×]?(\d+[.,]?\d*\s?(?:stk|pk|kg|g|l|dl)?)$/i); if(m){ s=m[1]; qty=m[2]; } }
   s = s.charAt(0).toUpperCase()+s.slice(1);
@@ -297,8 +319,13 @@ async function removeItem(id){
 
 // ---------- Handlinger ----------
 function addItem(raw){
-  const {name,qty} = parseInput(raw);
+  const p = parseInput(raw);
+  addParsed(p.name, p.qty);
+}
+function addParsed(name, qty){
+  name=String(name||"").trim().slice(0,80); qty=String(qty||"").trim().slice(0,20);
   if(!name) return;
+  name=name.charAt(0).toUpperCase()+name.slice(1);
   // finnes den allerede (ikke avkrysset)? oppdater i stedet
   const existing = Object.entries(items).find(([,it])=>it.name.toLowerCase()===name.toLowerCase());
   const key = name.toLowerCase();
@@ -521,7 +548,7 @@ function renderSheet(){
     try{ await navigator.clipboard.writeText(txt); showToast("Kopiert",false); }catch(e){ showToast("Kunne ikke kopiere",false); }
   };
 }
-function openSheet(){ document.getElementById("sheetTitle").textContent="Sorter varer"; renderSheet(); document.getElementById("sheetBg").hidden=false; }
+function openSheet(){ const sb=document.getElementById("sheetBody"); sb.oninput=null; sb.onchange=null; document.getElementById("sheetTitle").textContent="Sorter varer"; renderSheet(); document.getElementById("sheetBg").hidden=false; }
 function closeSheet(){ document.getElementById("sheetBg").hidden=true; }
 function setCategory(key,cat){
   const name=(uncat[key]&&uncat[key].name)||key;
@@ -613,6 +640,124 @@ listEl.addEventListener("focusout",e=>{
   }
 });
 
+// ---------- Les ingredienser fra bilde av oppskrift ----------
+const TESS_URL="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+let tessLoading=null, recipeRows=[], recipeText="";
+function loadTesseract(){
+  if(window.Tesseract) return Promise.resolve();
+  if(tessLoading) return tessLoading;
+  tessLoading=new Promise((res,rej)=>{
+    const s=document.createElement("script"); s.src=TESS_URL; s.async=true;
+    s.onload=()=>res(); s.onerror=()=>{ tessLoading=null; rej(new Error("load")); };
+    document.head.appendChild(s);
+  });
+  return tessLoading;
+}
+// Skaler ned, gjør gråtone og øk kontrasten – gir bedre tekstgjenkjenning
+async function prepImage(file){
+  const url=URL.createObjectURL(file);
+  const img=await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
+  const max=2000, sc=Math.min(1,max/Math.max(img.width,img.height));
+  const c=document.createElement("canvas"); c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc);
+  const g=c.getContext("2d"); g.drawImage(img,0,0,c.width,c.height);
+  const d=g.getImageData(0,0,c.width,c.height), p=d.data;
+  for(let i=0;i<p.length;i+=4){
+    let v=0.299*p[i]+0.587*p[i+1]+0.114*p[i+2];
+    v=(v-128)*1.4+128; v=v<0?0:v>255?255:v;
+    p[i]=p[i+1]=p[i+2]=v;
+  }
+  g.putImageData(d,0,0);
+  return {canvas:c,url};
+}
+function recipeSheet(html){
+  document.getElementById("sheetTitle").textContent="Ingredienser fra bilde";
+  document.getElementById("sheetBody").innerHTML=html;
+  document.getElementById("sheetBg").hidden=false;
+}
+function setProgress(txt,frac){
+  const st=document.getElementById("rcStatus"), pr=document.getElementById("rcProg");
+  if(st) st.lastElementChild.textContent=txt;
+  if(pr&&frac!=null) pr.style.width=Math.round(frac*100)+"%";
+}
+async function readRecipe(file){
+  let prep;
+  try{ prep=await prepImage(file); }catch(e){ showToast("Kunne ikke åpne bildet",false); return; }
+  recipeSheet(`<img class="rc-img" src="${prep.url}" alt="Bildet av oppskriften">
+    <div class="rc-status" id="rcStatus"><span class="spin"></span><span>Laster tekstgjenkjenning…</span></div>
+    <div class="bar-prog"><i id="rcProg"></i></div>
+    <p>Første gang lastes det ned noen MB. Etterpå går det raskere.</p>`);
+  try{
+    await loadTesseract();
+    setProgress("Gjør klar norsk språk…",0.05);
+    const worker=await Tesseract.createWorker("nor",1,{logger:m=>{
+      if(m.status==="recognizing text") setProgress("Leser teksten…",0.15+0.85*(m.progress||0));
+      else if(/load/.test(m.status||"")) setProgress("Laster ned språkdata…",0.05+0.1*(m.progress||0));
+    }});
+    const {data}=await worker.recognize(prep.canvas);
+    await worker.terminate();
+    recipeText=data.text||"";
+    showRecipeResult();
+  }catch(e){
+    recipeSheet(`<img class="rc-img" src="${prep.url}" alt="">
+      <p>Fikk ikke lest bildet. Tekstgjenkjenningen trenger nett første gang den brukes – sjekk at du er på nett og prøv igjen.</p>
+      <button class="bigbtn secondary" type="button" id="rcRetry">Prøv igjen</button>`);
+    document.getElementById("rcRetry").onclick=()=>readRecipe(file);
+  }
+}
+function showRecipeResult(){
+  recipeRows=parseRecipe(recipeText);
+  const n=recipeRows.length;
+  let h="";
+  if(n){
+    h+=`<p>Fant ${n} ${n===1?"ingrediens":"ingredienser"}. Fjern haken på det du har, og trykk på et navn eller antall for å rette det.</p>
+      <ul>`+recipeRows.map((r,i)=>`<li class="rrow${r.checked?"":" off"}" data-i="${i}">
+        <input type="checkbox" ${r.checked?"checked":""} aria-label="Ta med ${esc(r.name)}">
+        <input class="rn" value="${esc(r.name)}" aria-label="Navn">
+        <input class="rq" value="${esc(r.qty)}" placeholder="antall" aria-label="Antall"></li>`).join("")+`</ul>
+      <div class="sheet-actions" style="flex-direction:column;gap:0">
+        <button class="bigbtn primary" type="button" id="rcAdd"></button>
+      </div>`;
+  } else {
+    h+=`<p>Fant ingen ingredienser i bildet. Prøv å ta bildet rett ovenfra, i godt lys, og med bare ingredienslista i bildet.</p>`;
+  }
+  h+=`<button class="linkbtn" type="button" id="rcShowText">Vis teksten som ble lest</button>
+    <div id="rcTextBox" hidden>
+      <p>Du kan rette teksten og lese den på nytt.</p>
+      <textarea class="field" id="rcText">${esc(recipeText)}</textarea>
+      <button class="bigbtn secondary" type="button" id="rcReparse">Hent ingredienser på nytt</button>
+    </div>`;
+  recipeSheet(h);
+  const $=id=>document.getElementById(id);
+  const upd=()=>{ const b=$("rcAdd"); if(!b) return; const k=recipeRows.filter(r=>r.checked&&r.name.trim()).length;
+    b.textContent=k?`Legg til ${k} ${k===1?"vare":"varer"}`:"Ingen valgt"; b.disabled=!k; };
+  upd();
+  const body=$("sheetBody");
+  body.oninput=e=>{
+    const li=e.target.closest(".rrow"); if(!li) return; const r=recipeRows[+li.dataset.i];
+    if(e.target.classList.contains("rn")) r.name=e.target.value;
+    if(e.target.classList.contains("rq")) r.qty=e.target.value;
+    upd();
+  };
+  body.onchange=e=>{
+    if(e.target.type!=="checkbox") return;
+    const li=e.target.closest(".rrow"); const r=recipeRows[+li.dataset.i];
+    r.checked=e.target.checked; li.classList.toggle("off",!r.checked); upd();
+  };
+  $("rcShowText").onclick=()=>{ $("rcTextBox").hidden=!$("rcTextBox").hidden; };
+  $("rcReparse").onclick=()=>{ recipeText=$("rcText").value; showRecipeResult(); };
+  const add=$("rcAdd");
+  if(add) add.onclick=()=>{
+    const pick=recipeRows.filter(r=>r.checked&&r.name.trim());
+    expanded=null;
+    for(const r of pick) addParsed(r.name, r.qty);
+    body.oninput=null; body.onchange=null;
+    closeSheet();
+    showToast(`${pick.length} ${pick.length===1?"vare":"varer"} lagt til`,false);
+  };
+}
+document.getElementById("camBtn").addEventListener("click",()=>{ const f=document.getElementById("camFile"); f.value=""; f.click(); });
+document.getElementById("camFile").addEventListener("change",e=>{ const f=e.target.files&&e.target.files[0]; if(f) readRecipe(f); });
+
 // ---------- Del / send på e-post ----------
 const LS_MAIL="handleliste.mailto.v1";
 function shareText(includeDone){
@@ -633,7 +778,7 @@ function shareText(includeDone){
   t+=`\nTotalt ${list.length} ${list.length===1?"vare":"varer"}.\n`;
   return t;
 }
-function openShare(){
+function openShare(){ { const sb=document.getElementById("sheetBody"); sb.oninput=null; sb.onchange=null; }
   const to=lsGet(LS_MAIL,"");
   const anyDone=Object.values(items).some(it=>it.done);
   document.getElementById("sheetTitle").textContent="Send lista";
@@ -701,7 +846,7 @@ document.getElementById("shareBtn").addEventListener("click",openShare);
 items = lsGet(LS_ITEMS,{});
 render();
 
-const APP_VERSION="11";
+const APP_VERSION="12";
 if("serviceWorker" in navigator){
   // Last siden på nytt én gang når en ny versjon tar over
   const hadController=!!navigator.serviceWorker.controller; let reloaded=false;
